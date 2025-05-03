@@ -1,169 +1,114 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleToggle = (form) => {
-    setIsLogin(form === "login");
-    resetForm();
-  };
-
-  const resetForm = () => {
-    setEmail("");
-    setPassword("");
-    setName("");
-    setEmailError("");
-    setPasswordError("");
+  const handleNameChange = (e) => {
+    setName(e.target.value);
+    setError("");
   };
 
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
-    setEmailError("");
+    setError("");
   };
 
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
-    setPasswordError("");
+    setError("");
   };
 
-  const validateForm = () => {
-    let isValid = true;
-
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setEmailError("Please enter a valid email address.");
-      isValid = false;
-    }
-
-    if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
-      isValid = false;
-    }
-
-    return isValid;
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      alert(isLogin ? "Login successful!" : "Signup successful!");
-      resetForm();
+
+    try {
+      const response = await axios.post("http://localhost:8081/signup", {  // Changed endpoint to /signup
+        name, // Include name in request
+        email,
+        password,
+      });
+
+      if (response.data.success) {
+        alert("Signup successful!");
+        navigate(response.data.redirectUrl || "/login"); // Redirect after successful signup, potentially to login
+      } else {
+        setError(response.data.message || "Signup failed. Please try again.");
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "An error occurred. Please try again.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-800 flex flex-col items-center justify-center relative">
-      <button
-        className="absolute top-4 left-4 px-6 py-2 text-sm font-bold transition-colors duration-300 text-gray-500 bg-transparent border border-gray-500 rounded hover:bg-gray-500 hover:text-white"
-        onClick={() => navigate("/")}
-      >
-        Back
-      </button>
+    <div>
+      <div className="flex min-h-screen">
+        {/* Left Side */}
+        <div className="flex-1 bg-blue-700 text-white flex flex-col justify-center items-center p-8">
+          <div className="text-6xl mb-4"></div>
+          <h1 className="text-5xl font-bold mb-4 pt-50">
+            Hello<br /> from <br/>Code Sync<span role="img" aria-label="waving hand">👋</span>
+          </h1>
+          <p className="text-lg mb-8"></p> {/* You can add more descriptive text here */}
+          <p className="mt-auto text-sm">© 2024 codesync. All rights reserved.</p>
+        </div>
 
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="relative mb-6">
-            <div className="flex justify-around">
-              <button
-                className={`px-6 py-2 text-sm font-bold transition-colors duration-300 ${
-                  isLogin ? "text-gray-800" : "text-gray-500"
-                }`}
-                onClick={() => handleToggle("login")}
-              >
-                Login
-              </button>
-              <button
-                className={`px-6 py-2 text-sm font-bold transition-colors duration-300 ${
-                  !isLogin ? "text-gray-800" : "text-gray-500"
-                }`}
-                onClick={() => handleToggle("signup")}
-              >
-                Signup
-              </button>
-            </div>
-            {/* Slider */}
-            <div
-              className={`absolute bottom-0 left-0 w-1/2 h-1 bg-gray-500 rounded transition-transform duration-300 ${
-                isLogin ? "transform translate-x-0" : "transform translate-x-full"
-              }`}
-            ></div>
-          </div>
+        {/* Right Side */}
+        <div className="flex-1 bg-white flex flex-col justify-center items-center p-8">
+          <div className="w-full max-w-md">
+            <h2 className="text-3xl font-bold mb-6">Code Sync</h2>
+            <h3 className="text-2xl font-semibold mb-4">Create a Free Account</h3> {/* Changed title */}
+            <p className="text-sm mb-6">
+              Already have an account?{" "}
+              <a href="/login" className="text-blue-500">Login</a> {/* Link to login */}
+            </p>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <h2 className="text-xl font-bold text-center text-gray-800">
-              {isLogin ? "Login Form" : "Signup Form"}
-            </h2>
-            {!isLogin && (
-              <div>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+            <div> {/* Added name input field */}
                 <input
                   type="text"
                   placeholder="Full Name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={handleNameChange}
+                  className="w-full p-3 border border-gray-300 rounded"
+                  required
                 />
               </div>
-            )}
-            <div>
-              <input
-                type="email"
-                placeholder="Email Address"
-                value={email}
-                onChange={handleEmailChange}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  emailError ? "border-red-500 focus:ring-red-500" : "focus:ring-blue-500"
-                }`}
-              />
-              {emailError && (
-                <p className="text-sm text-red-500 mt-1">{emailError}</p>
-              )}
-            </div>
-            <div>
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={handlePasswordChange}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  passwordError ? "border-red-500 focus:ring-red-500" : "focus:ring-blue-500"
-                }`}
-              />
-              {passwordError && (
-                <p className="text-sm text-red-500 mt-1">{passwordError}</p>
-              )}
-            </div>
-            {isLogin && (
-              <a
-                href="#"
-                className="text-sm text-blue-700 hover:underline block text-right"
+              <div>
+                <input
+                  type="email"
+                  placeholder="Email Address"
+                  value={email}
+                  onChange={handleEmailChange}
+                  className="w-full p-3 border border-gray-300 rounded"
+                  required
+                />
+              </div>
+              <div>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={handlePasswordChange}
+                  className="w-full p-3 border border-gray-300 rounded"
+                  required
+                />
+              </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
+              <button
+                type="submit"
+                className="w-full p-3 bg-black text-white rounded"
               >
-                Forgot password?
-              </a>
-            )}
-            <button
-              type="submit"
-              className="w-full bg-gray-700 text-white py-2 rounded-lg hover:bg-blue-800"
-            >
-              {isLogin ? "Login" : "Signup"}
-            </button>
-            <p className="text-center text-sm text-gray-600">
-              {isLogin ? "Not a member? " : "Already have an account? "}
-              <a
-                href="#"
-                onClick={() => handleToggle(isLogin ? "signup" : "login")}
-                className="text-blue-700 hover:underline font-medium"
-              >
-                {isLogin ? "Signup now" : "Login now"}
-              </a>
-            </p>
-          </form>
+                Sign Up
+              </button>
+             {/* Removed Google login button for signup */}
+            </form>
+          </div>
         </div>
       </div>
     </div>
