@@ -8,6 +8,8 @@ const Login = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
     setError("");
@@ -22,7 +24,7 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post("http://localhost:8081/login", {
+      const response = await axios.post(`${API_BASE_URL}/login`, {
         email,
         password,
       });
