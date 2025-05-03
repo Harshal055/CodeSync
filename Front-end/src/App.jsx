@@ -5,11 +5,12 @@ import {
   Route,
   useLocation,
 } from "react-router-dom";
-import Navbar from "./Pages/Navbar";
+
 import Login from "./Pages/login"; // Changed to uppercase
-import Signup from "./Pages/Signup"; // Ensure this is used if needed
+import Signup from "./Pages/signup"; // Changed to lowercase 's'
 
 import Home from "./Pages/Home";
+
 
 import Feature from "./Components/Feature";
 
