@@ -57,25 +57,7 @@ const Feature = () => {
       </div>
 
     </div>
-    </div>
-    <div className="flex-1 bg-white text-white flex flex-col   justify-center items-center p-8">
-      <div className="h-screen w-screen">
-        <div
-          className="h-[60vh] w-[50vw] ml-30   items-center justify-center bg-black rounded-xl"
-        >
-        </div>
-        <div
-          className="h-[60vh] w-[50vw] ml-auto mt-[10vh] mr-4 items-center justify-center bg-black rounded-xl"
-        >
-        </div>
-      </div>
-    </div>
-    <div className="flex-1 bg-white text-white flex flex-col   justify-center items-center p-8">
-    <div className="h-[50vh] w-screen">
-      </div>
-
-      </div>
-    
+    </div>   
 
 
      

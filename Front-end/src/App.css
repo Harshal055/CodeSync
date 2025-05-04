@@ -1,0 +1,53 @@
+
+#root {
+    margin: 0%;
+    padding: 0%;
+  
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none; 
+    scrollbar-width: none; 
+  }
+  
+  /* app.css */
+  .popup-enter {
+    max-height: 0;
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  
+  .popup-enter-active {
+    max-height: 500px; /* Adjust as needed */
+    opacity: 1;
+    transform: scale(1);
+    transition: all 500ms ease-out;
+  }
+  
+  .popup-exit {
+    max-height: 500px;
+    opacity: 1;
+    transform: scale(1);
+  }
+  
+  .popup-exit-active {
+    max-height: 0;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 500ms ease-out;
+  }
+  
+  
+  .resize-handle {
+    cursor: grab !important; /* Forces the grab cursor */
+    pointer-events: auto !important;
+    
+  }
+  
+  .resize-handle:active {
+    cursor: grabbing !important;
+  }

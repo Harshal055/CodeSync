@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
+
+
 export default function Navbar() {
   const navigate = useNavigate();
   const [prevScrollPos, setPrevScrollPos] = useState(0);
@@ -20,11 +22,14 @@ export default function Navbar() {
       try {
         const userData = JSON.parse(storedUser); // Parse only if it exists
         // Also check if userData itself and the name property exist after parsing
-        if (userData && userData.name) {
+        // Check for firstName instead of name, as that's what Login.jsx stores
+        if (userData && userData.firstName) { 
             setIsLoggedIn(true);
-            setUserName(userData.name);
+            // Combine firstName and lastName for display
+            const fullName = `${userData.firstName} ${userData.lastName || ''}`.trim();
+            setUserName(fullName);
         } else {
-           console.error("Parsed user data is invalid or missing name:", userData);
+           console.error("Parsed user data is invalid or missing firstName:", userData);
            localStorage.removeItem("user"); // Clean up invalid data
         }
       } catch (error) {
@@ -154,7 +159,7 @@ export default function Navbar() {
             </li>
             <li>
               <button
-                onClick={() => handleNavigation("/problems")}
+                onClick={() => handleNavigation("/Problems")}
                 className="text-white hover:text-gray-300 drop-shadow-lg transition-colors"
               >
                 Problems
@@ -191,11 +196,11 @@ export default function Navbar() {
                     // onMouseLeave={handleMouseLeave} // Optional: Close on mouse leave from the menu
                   >
                     <button
-                      onClick={() => { navigate("/profile"); setIsDropdownOpen(false); }}
+                      onClick={() => { navigate("/UserProfile"); setIsDropdownOpen(false); }}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       Profile
-                    </button>
+                    </button> 
                     <button
                       onClick={handleLogout} // Logout function already closes dropdown
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

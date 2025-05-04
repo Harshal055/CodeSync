@@ -8,6 +8,8 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 
   const handleNameChange = (e) => {
     setName(e.target.value);
@@ -27,8 +29,8 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try {
-      const response = await axios.post("http://localhost:8081/signup", {  // Changed endpoint to /signup
+    try { const response = await axios.post(`http://localhost:8081/signup`,
+      {  // Changed endpoint to /signup
         name, // Include name in request
         email,
         password,
@@ -41,6 +43,8 @@ const Signup = () => {
         setError(response.data.message || "Signup failed. Please try again.");
       }
     } catch (err) {
+      console.log(err);
+      
       setError(err.response?.data?.message || "An error occurred. Please try again.");
     }
   };
