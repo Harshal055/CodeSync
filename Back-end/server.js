@@ -1,3 +1,7 @@
+// Simple homepage route
+app.get('/', (req, res) => {
+  res.send('Welcome to CodeSync Backend API!');
+});
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
