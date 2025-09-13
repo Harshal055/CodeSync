@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState, Suspense } from "react";
 import {
   MdOutlinePublishedWithChanges,
   MdDownload,
@@ -7,9 +7,12 @@ import {
 } from "react-icons/md";
 import { FaPlay } from "react-icons/fa";
 import { MdClear } from "react-icons/md";
-import Editor from "@monaco-editor/react";
+const Editor = React.lazy(() => import("@monaco-editor/react"));
 import { UserContext } from "./UserContext";
 import socket from "./socket";
+import Tippy from '@tippyjs/react';
+import 'tippy.js/dist/tippy.css';
+import "./editor.css";
 
 
 export const EditorContainer = ({
@@ -139,6 +142,24 @@ export const EditorContainer = ({
     // Clean up the created URL
     URL.revokeObjectURL(downloadUrl);
   };
+
+  // Keyboard shortcuts: Ctrl/Cmd+S => save, Ctrl/Cmd+Enter => run
+  useEffect(() => {
+    const handler = (e) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmd = isMac ? e.metaKey : e.ctrlKey;
+      if (cmd && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onSaveCode();
+      }
+      if (cmd && e.key === 'Enter') {
+        e.preventDefault();
+        runCode();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onSaveCode, runCode]);
 
   const onSaveCode = () => {
     if (!file?.id || !roomId) return;
@@ -341,64 +362,53 @@ export const EditorContainer = ({
 
   return (
     <div className="flex flex-col h-full">
-      <header className="h-10 flex justify-between font-medium rounded-t-md border-b border-[#333333] px-2 py-1.5">
-        <span className="flex items-center justify-center bg-[#282828] gap-1 px-1.5 py-1 rounded-sm ">
-          {getIcon[file?.icon]}
-          <h1>{file?.title}</h1>
-          <span
-            className={`w-2 h-2 mx-0.5 rounded-full ${
-              isSaved ? "w-0 h-0 mx-0" : "bg-gray-600"
-            }`}
-          ></span>
-          <MdClear
-            size={19}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-            onClick={closeFile}
-          />
-        </span>
-        <span className="flex items-center gap-3 pr-1\1">
-          <FaPlay
-            size={16}
-            onClick={runCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <MdOutlinePublishedWithChanges
-            size={20}
-            onClick={onSaveCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <MdDownload
-            size={22}
-            onClick={exportCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <span onClick={onFullScreen} className="ml-[-5px]">
-            {isFullScreen ? (
-              <MdFullscreenExit
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            ) : (
-              <MdFullscreen
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            )}
-          </span>
-        </span>
-      </header>
+      <header className="editor-header">
+            <div className="left">
+              <img src="/src/assets/logo.png" className="logo" alt="logo" />
+              <div>
+                <h1>{file?.title}</h1>
+                <div className="badge">{file?.language || "text"}</div>
+              </div>
+            </div>
+
+            <div className="editor-actions">
+              <Tippy content="Run (Ctrl/Cmd+Enter)">
+                <button className="editor-btn play-btn" onClick={runCode}>
+                  <FaPlay />
+                </button>
+              </Tippy>
+              <Tippy content="Save (Ctrl/Cmd+S)">
+                <button className="editor-btn" onClick={onSaveCode}>
+                  <MdOutlinePublishedWithChanges />
+                </button>
+              </Tippy>
+              <Tippy content="Download">
+                <button className="editor-btn" onClick={exportCode}>
+                  <MdDownload />
+                </button>
+              </Tippy>
+              <Tippy content="Toggle Fullscreen">
+                <button className="editor-btn" onClick={onFullScreen}>
+                  {isFullScreen ? <MdFullscreenExit /> : <MdFullscreen />}
+                </button>
+              </Tippy>
+              <div className="save-indicator">{isSaved ? "Saved" : "Unsaved"}</div>
+            </div>
+          </header>
 
       <section className="flex-1 py-2 px-1 rounded-b-md">
-        <Editor
-          key={file?.id}
-          height={"100%"}
-          language={file?.language}
-          theme="custom-dark"
-          beforeMount={handleEditorWillMount}
-          value={codeRef.current}
-          onChange={onChangeCode}
-          onMount={handleEditorMount} // Attach the onMount event
-        />
+        <Suspense fallback={<div style={{height: '100%'}}>Loading editor...</div>}>
+          <Editor
+            key={file?.id}
+            height={"100%"}
+            language={file?.language}
+            theme="custom-dark"
+            beforeMount={handleEditorWillMount}
+            value={codeRef.current}
+            onChange={onChangeCode}
+            onMount={handleEditorMount} // Attach the onMount event
+          />
+        </Suspense>
       </section>
     </div>
   );
