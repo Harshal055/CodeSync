@@ -13,19 +13,35 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app); // Create HTTP server from Express app
-// Allowed frontend origins (include variants without/with trailing slash)
+// Allowed frontend origins helper
+// Permit any vercel.app subdomain (Vercel deployments) plus localhost/127.0.0.1 dev origins
 const allowedOrigins = [
-  'https://code-sync-xng3.vercel.app',
-  'https://code-sync-xng3.vercel.app/',
-  'https://code-sync-xng3.vercel.app',
+  'https://codesync-2pky.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
 ];
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // allow server-to-server (curl) requests without Origin
+  try {
+    const o = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(o)) return true;
+    // allow any vercel.app subdomain (production/staging deployments)
+    if (o.endsWith('.vercel.app')) return true;
+    // allow localhost/127.0.0.1 prefixes
+    if (o.startsWith('http://localhost') || o.startsWith('http://127.0.0.1') || o.startsWith('https://localhost') || o.startsWith('https://127.0.0.1')) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
 
 const io = new Server(server, {         // Attach Socket.IO to the HTTP server
   cors: {
     origin: (origin, callback) => {
-      // allow requests with no origin (like curl, server-to-server)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       return callback(new Error('Not allowed by CORS'), false);
     },
     methods: ["GET", "POST"],
@@ -35,8 +51,7 @@ const io = new Server(server, {         // Attach Socket.IO to the HTTP server
 // Enable CORS for all routes (replace "*" with your frontend URL in production)
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (isAllowedOrigin(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'), false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
