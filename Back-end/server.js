@@ -1,4 +1,3 @@
-
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -9,25 +8,47 @@ const { Server } = require("socket.io");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios"); // <-- Add this line
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app); // Create HTTP server from Express app
+// Allowed frontend origins (include variants without/with trailing slash)
+const allowedOrigins = [
+  'https://code-sync-xng3.vercel.app',
+  'https://code-sync-xng3.vercel.app/',
+  'https://code-sync-xng3.vercel.app',
+];
+
 const io = new Server(server, {         // Attach Socket.IO to the HTTP server
   cors: {
-    origin: "https://code-sync-xng3.vercel.app/", // Allow frontend origin
+    origin: (origin, callback) => {
+      // allow requests with no origin (like curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'), false);
+    },
     methods: ["GET", "POST"],
   },
 });
 
 // Enable CORS for all routes (replace "*" with your frontend URL in production)
 app.use(cors({
-  origin: 'https://code-sync-xng3.vercel.app/', // Allow your frontend origin
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Make sure POST is allowed
-  credentials: true // If needed
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'), false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
 }));
 
 app.use(express.json());
+// Request logger to help debug incoming requests and CORS/preflight
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} - origin: ${req.headers.origin}`);
+  next();
+});
 // --- Database Setup ---
 // Connect to MongoDB 
 const mongoURI = process.env.MONGODB_URI;

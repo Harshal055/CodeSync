@@ -3,7 +3,7 @@ import { modalConstants, ModalContext } from "./ModalContext";
 import { io } from "socket.io-client";
 import { UserContext } from "./UserContext";
 
-const socket = io("http://localhost:5000");
+const socket = io(import.meta.env.VITE_API_BASE_URL || "http://localhost:8081");
 
 export const OpenCreateFolder = ({
   setNewFolderId,
