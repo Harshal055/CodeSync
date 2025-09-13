@@ -1,4 +1,4 @@
 // socket.js
 import { io } from "socket.io-client";
-const socket = io("http://localhost:5000");
+const socket = io("https://code-sync-xng3.vercel.app/");
 export default socket;

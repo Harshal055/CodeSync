@@ -14,14 +14,14 @@ const app = express();
 const server = http.createServer(app); // Create HTTP server from Express app
 const io = new Server(server, {         // Attach Socket.IO to the HTTP server
   cors: {
-    origin: "http://localhost:5173", // Allow frontend origin
+    origin: "https://code-sync-xng3.vercel.app/", // Allow frontend origin
     methods: ["GET", "POST"],
   },
 });
 
 // Enable CORS for all routes (replace "*" with your frontend URL in production)
 app.use(cors({
-  origin: 'http://localhost:5173', // Allow your frontend origin
+  origin: 'https://code-sync-xng3.vercel.app/', // Allow your frontend origin
   methods: ['GET', 'POST', 'PUT', 'DELETE'], // Make sure POST is allowed
   credentials: true // If needed
 }));
