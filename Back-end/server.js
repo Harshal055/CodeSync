@@ -42,7 +42,8 @@ const io = new Server(server, {         // Attach Socket.IO to the HTTP server
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
-      return callback(new Error('Not allowed by CORS'), false);
+      // Do not pass an Error object to the CORS callback; return false so the request is rejected without throwing
+      return callback(null, false);
     },
     methods: ["GET", "POST"],
   },
@@ -52,7 +53,8 @@ const io = new Server(server, {         // Attach Socket.IO to the HTTP server
 app.use(cors({
   origin: (origin, callback) => {
     if (isAllowedOrigin(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'), false);
+    // Do not pass an Error object to the CORS callback; return false so the request is rejected without throwing
+    return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
@@ -631,4 +633,11 @@ const PORT = process.env.PORT || 8081;
 // Use server.listen (the http server instance) instead of app.listen
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+});
+
+// Basic error handler to capture and log errors (keeps responses JSON and logs stack)
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ success: false, message: 'Server error', error: err && err.message ? err.message : String(err) });
 });
