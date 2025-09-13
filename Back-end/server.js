@@ -300,14 +300,16 @@ io.on("connection", (socket) => {
           room.currentFileId = selectedFolderData.file?.[0]?.id || null;
       }
 
-      io.to(roomId).emit("folderChanged", { folderId }); // Notify clients
+  // Notify other clients (exclude sender) about folder change
+  socket.to(roomId).emit("folderChanged", { folderId, sender: socket.id });
 
       // Optionally re-broadcast full data if needed, or just the change
        const filesArray = Array.from(room.files.values()).map(f => {
             const parentFolder = room.folders.find(fold => fold.file?.some(fileInFolder => fileInFolder.id === f.id));
             return { ...f, folderId: parentFolder?.id || null };
         });
-      io.to(roomId).emit("folderData", {
+      // Broadcast folderData to others (host already has it)
+      socket.to(roomId).emit("folderData", {
           folders: room.folders,
           files: filesArray,
           hostId: room.hostId,
@@ -320,10 +322,12 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (room) {
       room.currentFileId = fileId;
-      io.to(roomId).emit("fileChanged", { fileId });
+      // Notify other clients that the active file changed (exclude sender)
+  socket.to(roomId).emit("fileChanged", { fileId, sender: socket.id });
 
       // Send the current code for the newly selected file
       const code = room.codeByFileId.get(fileId) || "";
+      // Send codeUpdate to all (including sender) so everyone has the file content
       io.to(roomId).emit("codeUpdate", { roomId, fileId, code });
     }
   });

@@ -20,6 +20,19 @@ export default defineConfig({
       include: [/node_modules/],
       extensions: ['.js', '.jsx']
     }
+    ,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'monaco';
+            if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
+            if (id.includes('tippy.js') || id.includes('@tippyjs')) return 'tippy';
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
   optimizeDeps: {
     include: ['three', 'postprocessing']

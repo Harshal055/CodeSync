@@ -298,10 +298,11 @@ const Editor = () => {
       sessionStorage.setItem("selectedFolder", folderId);
     });
 
-    socket.on("fileChanged", ({ fileId }) => {
+    socket.on("fileChanged", ({ fileId, sender }) => {
       console.log("📄 File changed remotely:", fileId);
-      // ✅ Prevent file reset from self-triggering on refresh
-      if (socket.id === socket.io.engine.id) return;
+
+      // If the sender is this socket, ignore (server should already exclude sender but double-check)
+      if (sender === socket.id) return;
 
       setSelectedFile(fileId);
 
@@ -315,14 +316,14 @@ const Editor = () => {
       }
 
       // ✅ Only set session if it's different (avoid overwriting user's choice on refresh)
-      const stored = JSON.parse(
-        sessionStorage.getItem(`selectedFile_${selectedFolder}`)
-      );
-      if (stored !== fileId) {
-        sessionStorage.setItem(
-          `selectedFile_${selectedFolder}`,
-          JSON.stringify(fileId)
-        );
+      try {
+        const storedRaw = sessionStorage.getItem(`selectedFile_${selectedFolder}`);
+        const stored = storedRaw ? JSON.parse(storedRaw) : null;
+        if (stored !== fileId) {
+          sessionStorage.setItem(`selectedFile_${selectedFolder}`, JSON.stringify(fileId));
+        }
+      } catch (e) {
+        sessionStorage.setItem(`selectedFile_${selectedFolder}`, JSON.stringify(fileId));
       }
     });
 
