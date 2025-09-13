@@ -2,6 +2,7 @@ import React, { useState, useContext } from "react"; // Import useContext
 import axios from "axios"; // For making API requests
 import { Link, useNavigate } from "react-router-dom";
 import { UserContext } from "../Components/Terminal/UserContext"; // Import UserContext
+import API_BASE_URL from "../lib/api";
 
 // Define API_BASE_URL (ensure your .env file has VITE_API_BASE_URL=http://localhost:8081)
 const Login = () => {
@@ -10,7 +11,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; 
   const { setUserData } = useContext(UserContext); // Get setUserData from context
 
   const handleEmailChange = (e) => {

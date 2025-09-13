@@ -1,5 +1,5 @@
 // socket.js
 import { io } from "socket.io-client";
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
-const socket = io(BACKEND_URL);
+import API_BASE_URL from "../../lib/api";
+const socket = io(API_BASE_URL);
 export default socket;

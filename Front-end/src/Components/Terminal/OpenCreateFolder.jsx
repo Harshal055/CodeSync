@@ -2,8 +2,8 @@ import React, { useContext } from "react";
 import { modalConstants, ModalContext } from "./ModalContext";
 import { io } from "socket.io-client";
 import { UserContext } from "./UserContext";
-
-const socket = io(import.meta.env.VITE_API_BASE_URL || "http://localhost:8081");
+import API_BASE_URL from '../../lib/api';
+const socket = io(API_BASE_URL);
 
 export const OpenCreateFolder = ({
   setNewFolderId,

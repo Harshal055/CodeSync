@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import API_BASE_URL from "../lib/api";
 
 const Signup = () => {
   const [name, setName] = useState("");
@@ -8,7 +9,7 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  // API_BASE_URL imported from ../lib/api
 
 
   const handleNameChange = (e) => {

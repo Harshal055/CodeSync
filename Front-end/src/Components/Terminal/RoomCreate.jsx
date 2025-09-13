@@ -4,8 +4,8 @@ import { v4 as uuidV4 } from 'uuid';
 import { UserContext } from './UserContext';
 import toast from 'react-hot-toast';
 import io from 'socket.io-client';
-
-const socket = io(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081');
+import API_BASE_URL from '../../lib/api';
+const socket = io(API_BASE_URL);
 
 const RoomCreate = () => {
   const navigate = useNavigate();

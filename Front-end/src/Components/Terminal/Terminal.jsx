@@ -17,55 +17,10 @@ const Terminal = ({
   roomId,
 }) => {
   {
-    /*useEffect(() => {
-    const connectWebSocket = () => {
-      const socket = new WebSocket("ws://localhost:5000");
-
-      socket.onopen = () => {
-        console.log("Connected to WebSocket Server");
-        setIsWaitingForInput(false);
-      };
-
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log("📥 Received:", data);
-
-        setOutputText((prev) => {
-          let lines = prev.split("\n");
-
-          if (
-            data.output &&
-            (!lines.length || lines[lines.length - 1] !== data.output.trim())
-          ) {
-            return prev + (prev ? "\n" : "") + data.output.trim();
-          }
-
-          return prev;
-        });
-
-        setIsWaitingForInput(data.waitingForInput || false);
-      };
-
-      socket.onerror = (error) => {
-        console.error("WebSocket Error:", error);
-        setTimeout(connectWebSocket, 3000);
-      };
-
-      socket.onclose = () => {
-        console.log("WebSocket Disconnected, reconnecting...");
-        setTimeout(connectWebSocket, 3000);
-      };
-
-      setWs(socket);
-    };
-
-    connectWebSocket();
-    return () => {
-      if (ws) ws.close();
-    };
-  }, []);*/
+    /* Socket connection is provided via the shared socket.io client import (see ./socket).
+       The old raw WebSocket client (ws://localhost:5000) was removed to avoid hard-coded URLs.
+    */
   }
-
   useEffect(() => {
     socket.on("codeOutput", ({ output, waitingForInput }) => {
       setOutputText((prev) => {
