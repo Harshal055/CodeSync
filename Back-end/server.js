@@ -1,7 +1,4 @@
-// Simple homepage route
-app.get('/', (req, res) => {
-  res.send('Welcome to CodeSync Backend API!');
-});
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -40,6 +37,7 @@ mongoose.connect(mongoURI)
     console.error("MongoDB connection failed:", err);
     process.exit(1);
   });
+
 
 // User Schema and Model
 const userSchema = new mongoose.Schema({
@@ -90,6 +88,11 @@ app.post("/login", async (req, res) => {
     console.error("Login error:", error);
     res.status(500).json({ success: false, message: "Login failed. Please try again later." });
   }
+});
+
+// Simple homepage route
+app.get('/', (req, res) => {
+  res.send('Welcome to CodeSync Backend API!');
 });
 
 // --- Proxy Route ---
