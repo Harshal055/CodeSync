@@ -31,7 +31,7 @@ import { MdContentCopy } from "react-icons/md";
 import toast from "react-hot-toast";
 import socket from "./socket";
 import { useLocation } from "react-router-dom";
-import useVoiceChat from "../../hooks/useVoiceChat"; // <-- Corrected path
+import useVoiceChat from "../../Hooks/useVoiceChat";
 import VoiceChatManager from "./VoiceChatManager";
 
 const Editor = () => {

@@ -29,9 +29,9 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try { const response = await axios.post(`http://localhost:8081/signup`,
-      {  // Changed endpoint to /signup
-        name, // Include name in request
+    try { const response = await axios.post(`${API_BASE_URL}/signup`,
+      {
+        name,
         email,
         password,
       });
