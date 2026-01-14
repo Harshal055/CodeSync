@@ -16,7 +16,7 @@ const server = http.createServer(app); // Create HTTP server from Express app
 // Allowed frontend origins helper
 // Permit any vercel.app subdomain (Vercel deployments) plus localhost/127.0.0.1 dev origins
 const allowedOrigins = [
-  // 'https://codesync-2pky.onrender.com',
+  'https://codesync-2pky.onrender.com',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
