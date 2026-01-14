@@ -61,3 +61,9 @@ html, body {
   }
 }
 
+
+/* Remote Cursor Styles */
+.remote-cursor {
+  border-left: 2px solid #FFA500; /* Default Orange */
+  margin-left: -1px;
+}

@@ -1,43 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-
-
+import { UserContext } from "../Components/Terminal/UserContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const { userData, setUserData, user } = useContext(UserContext); // Use Context
   const [prevScrollPos, setPrevScrollPos] = useState(0);
   const [visible, setVisible] = useState(true);
   const [scrollPosition, setScrollPosition] = useState(0);
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState(" ");
   const dropdownRef = useRef(null);
   const dropdownMenuRef = useRef(null);
-  // Added state for dropdown visibility
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user"); // Get the string value first
-    if (storedUser) { // Check if it exists and is not null/undefined
-      try {
-        const userData = JSON.parse(storedUser); // Parse only if it exists
-        // Also check if userData itself and the name property exist after parsing
-        // Check for firstName instead of name, as that's what Login.jsx stores
-        if (userData && userData.firstName) { 
-            setIsLoggedIn(true);
-            // Combine firstName and lastName for display
-            const fullName = `${userData.firstName} ${userData.lastName || ''}`.trim();
-            setUserName(fullName);
-        } else {
-           console.error("Parsed user data is invalid or missing firstName:", userData);
-           localStorage.removeItem("user"); // Clean up invalid data
-        }
-      } catch (error) {
-          console.error("Failed to parse user data from localStorage:", error);
-          localStorage.removeItem("user"); // Clean up invalid data if parsing fails
-      }
-    }
-  }, []);
+  // Derived from Context
+  const isLoggedIn = !!user; // Use firebase user object for source of truth
+  const displayName = userData?.firstName
+    ? `${userData.firstName} ${userData.lastName || ''}`
+    : user?.displayName || user?.email?.split('@')[0] || "User";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -47,74 +27,56 @@ export default function Navbar() {
       setPrevScrollPos(currentScrollPos);
     };
 
-    // Corrected handleClickOutside to use the correct state setter
     const handleClickOutside = (event) => {
-      // Check if the click is outside the dropdown trigger AND the dropdown menu
       if (
-        dropdownRef.current && 
+        dropdownRef.current &&
         !dropdownRef.current.contains(event.target) &&
-        dropdownMenuRef.current && 
-        !dropdownMenuRef.current.contains(event.target) 
+        dropdownMenuRef.current &&
+        !dropdownMenuRef.current.contains(event.target)
       ) {
-        setIsDropdownOpen(false); // Close the dropdown
+        setIsDropdownOpen(false);
       }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    // Changed from "mousedown" to "click" for better compatibility, especially on mobile
-    document.addEventListener("click", handleClickOutside); 
+    document.addEventListener("click", handleClickOutside);
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
       document.removeEventListener("click", handleClickOutside);
     };
-    // Added isDropdownOpen to dependency array if needed, but likely not necessary for this logic
-  }, [prevScrollPos]); 
-
-  
- 
-
-  const handleMouseLeave = (e) => {
-    const dropdownElement = dropdownRef.current; // This ref is on the user name span
-    const menuElement = dropdownMenuRef.current; // This ref is not assigned to any visible element yet
-    const relatedTarget = e.relatedTarget;
-
-    // This logic might prematurely close the dropdown if the mouse briefly leaves
-    // the trigger (username) but moves onto the menu (if it existed).
-    // Consider using mouse enter/leave on a container wrapping both trigger and menu.
-    if (!dropdownElement?.contains(relatedTarget) && !menuElement?.contains(relatedTarget)) {
-      setIsDropdownOpen(false);
-    }
-  };
+  }, [prevScrollPos]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
-    setIsLoggedIn(false);
-    setUserName("");
-    setIsDropdownOpen(false); // Close dropdown on logout
+    localStorage.removeItem("user"); // Legacy
+    // Call context logout if available, otherwise just clear local
+    // Assuming context has logout:
+    // logout(); 
+    // But passing it in is better.
+    setUserData(null);
+    setIsDropdownOpen(false);
     navigate("/login");
   };
 
   const handleNavigation = (path) => {
-    
-    navigate(path); 
-
+    navigate(path);
   };
 
-  // Toggle dropdown visibility when username is clicked
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
 
+  const handleProfileClick = () => {
+    navigate("/UserProfile");
+  };
+
   const navbarStyle = {
-    // Corrected background color application - remove blur() function call
-    // Apply rgba for transparency that works with backdrop-filter
-    backgroundColor: `rgba(17, 24, 39, ${Math.min(scrollPosition / 300, 0.85)})`, // Example: Dark background with opacity
-    backdropFilter: scrollPosition > 10 ? "blur(8px)" : "none", // Apply blur only after some scroll
-    WebkitBackdropFilter: scrollPosition > 10 ? "blur(8px)" : "none", // For Safari
-    transition: "transform 0.3s ease-in-out, background-color 0.3s ease-in-out", // Smoother transitions
-    transform: visible ? 'translateY(0)' : 'translateY(-1000%)',
-    position: 'fixed', // Ensure it's fixed
+    backgroundColor: `rgba(17, 24, 39, ${Math.min(scrollPosition / 300, 0.85)})`,
+    backdropFilter: scrollPosition > 10 ? "blur(8px)" : "none",
+    WebkitBackdropFilter: scrollPosition > 10 ? "blur(8px)" : "none",
+    transition: "transform 0.3s ease-in-out, background-color 0.3s ease-in-out",
+    transform: visible ? 'translateY(0)' : 'translateY(-100%)',
+    position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
@@ -127,20 +89,20 @@ export default function Navbar() {
       <div className="container mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo and Title */}
-          <div 
-            className="flex items-center space-x-2 cursor-pointer" 
-            onClick={() => navigate('/')} // Navigate home on logo click
+          <div
+            className="flex items-center space-x-2 cursor-pointer"
+            onClick={() => navigate('/')}
           >
             <img
-              src="/src/assets/logo.png" // Make sure this path is correct relative to the public folder or handled by your build process
+              src="/src/assets/logo.png"
               alt="Code Sync Logo"
-              className="h-10 w-auto object-contain" // Use w-auto for better scaling
+              className="h-10 w-auto object-contain"
             />
             <span className="text-white font-bold text-xl">Code Sync</span>
           </div>
 
           {/* Navigation Links */}
-          <ul className="hidden md:flex items-center space-x-6 lg:space-x-9"> {/* Hide on small screens, adjust spacing */}
+          <ul className="hidden md:flex items-center space-x-6 lg:space-x-9">
             <li>
               <button
                 onClick={() => handleNavigation("/explore")}
@@ -151,10 +113,10 @@ export default function Navbar() {
             </li>
             <li>
               <button
-                onClick={() => handleNavigation("/feature")} // Assuming /feature is the correct route
+                onClick={() => handleNavigation("/feature")}
                 className="text-white hover:text-gray-300 drop-shadow-lg transition-colors"
               >
-                Features {/* Simplified text */}
+                Features
               </button>
             </li>
             <li>
@@ -176,42 +138,47 @@ export default function Navbar() {
           </ul>
 
           {/* Login/User Area */}
-          <div className="flex items-center relative"> {/* Added relative positioning for dropdown */}
+          <div className="flex items-center relative">
             {isLoggedIn ? (
               <div className="flex items-center space-x-4">
-                {/* User Name - Acts as dropdown trigger */}
-                <span
-                  ref={dropdownRef} // Assign ref to the trigger element
-                  onClick={toggleDropdown} // Toggle dropdown on click
-                  className="text-white hover:text-gray-300 drop-shadow-lg transition-colors cursor-pointer"
-                >
-                  {userName}
-                </span>
-
-                {/* Simple Dropdown Menu */}
-                {isDropdownOpen && (
-                  <div 
-                    ref={dropdownMenuRef} // Assign ref to the dropdown menu itself
-                    className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-60"
-                    // onMouseLeave={handleMouseLeave} // Optional: Close on mouse leave from the menu
+                {/* User Name */}
+                <div className="relative">
+                  <span
+                    ref={dropdownRef}
+                    onClick={toggleDropdown}
+                    className="text-white hover:text-gray-300 drop-shadow-lg transition-colors cursor-pointer font-semibold flex items-center gap-2"
                   >
-                    <button
-                      onClick={() => { navigate("/UserProfile"); setIsDropdownOpen(false); }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Profile
-                    </button> 
-                    <button
-                      onClick={handleLogout} // Logout function already closes dropdown
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
+                    {displayName} <span className="text-xs">▼</span>
+                  </span>
 
-                
-               
+                  {/* Dropdown Menu */}
+                  {isDropdownOpen && (
+                    <div
+                      ref={dropdownMenuRef}
+                      className="absolute right-0 top-full mt-2 w-48 bg-[#1f2937] border border-gray-700 rounded-md shadow-xl py-1 z-50"
+                    >
+                      <button
+                        onClick={() => { navigate("/RoomCreate"); setIsDropdownOpen(false); }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
+                      >
+                        Dashboard
+                      </button>
+                      <button
+                        onClick={() => { navigate("/UserProfile"); setIsDropdownOpen(false); }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
+                      >
+                        Profile
+                      </button>
+                      <div className="border-t border-gray-700 my-1"></div>
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-700"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <button
@@ -222,7 +189,7 @@ export default function Navbar() {
                 Login
               </button>
             )}
-           
+
           </div>
         </div>
       </div>

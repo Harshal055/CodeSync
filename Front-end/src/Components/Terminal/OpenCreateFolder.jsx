@@ -1,9 +1,7 @@
 import React, { useContext } from "react";
 import { modalConstants, ModalContext } from "./ModalContext";
-import { io } from "socket.io-client";
 import { UserContext } from "./UserContext";
-import API_BASE_URL from '../../lib/api';
-const socket = io(API_BASE_URL);
+import { saveFolderStructure, updateFileSelection } from "../../firebaseService";
 
 export const OpenCreateFolder = ({
   setNewFolderId,
@@ -14,7 +12,7 @@ export const OpenCreateFolder = ({
   setRemoteHostId,
 }) => {
   const modalFeatures = useContext(ModalContext);
-  const { folderFeatures} = useContext(UserContext);
+  const { folderFeatures } = useContext(UserContext);
 
   const handleCreateFolder = () => {
     setIsCreating(true);
@@ -23,35 +21,27 @@ export const OpenCreateFolder = ({
 
   const openFolder = () => {
     modalFeatures.openModal(modalConstants.OPEN_FOLDER);
-  
+
     modalFeatures.setModalPayLoad({
       setSelectedFolder: (folderId) => {
         const folder = folderFeatures.getFolderById(folderId);
         if (!folder) return;
-  
-        const files = folder.files || [];
-  
-        // Broadcast to room
-        socket.emit("folderSelected", { roomId, folderId });
-  
-        socket.emit("broadcastFolderData", {
-          roomId,
-          folders: [folder],
-          files: files.map((f) => ({ ...f, folderId: folder.id })),
-          hostId,
-        });
-  
-        setRemoteHostId(hostId); // let other components know who's host
+
+        // Save to Firebase
+        saveFolderStructure(roomId, [folder]);
+
+        setRemoteHostId(hostId);
         setSelectedFolder(folderId);
         sessionStorage.setItem("selectedFolder", folderId);
-  
+
+        const files = folder.files || [];
         if (files.length) {
           const firstFile = files[0];
           sessionStorage.setItem(
             `selectedFile_${folderId}`,
             JSON.stringify(firstFile.id)
           );
-          socket.emit("fileSelected", { roomId, fileId: firstFile.id });
+          updateFileSelection(roomId, hostId, firstFile.id);
         } else {
           sessionStorage.removeItem(`selectedFile_${folderId}`);
         }

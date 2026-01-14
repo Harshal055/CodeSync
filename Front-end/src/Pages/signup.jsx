@@ -1,7 +1,6 @@
-import React, { useState } from "react";
-import axios from "axios";
+import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import API_BASE_URL from "../lib/api";
+import { UserContext } from "../Components/Terminal/UserContext";
 
 const Signup = () => {
   const [name, setName] = useState("");
@@ -9,8 +8,8 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  // API_BASE_URL imported from ../lib/api
 
+  const { signup } = useContext(UserContext);
 
   const handleNameChange = (e) => {
     setName(e.target.value);
@@ -30,23 +29,13 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try { const response = await axios.post(`${API_BASE_URL}/signup`,
-      {
-        name,
-        email,
-        password,
-      });
-
-      if (response.data.success) {
-        alert("Signup successful!");
-        navigate(response.data.redirectUrl || "/login"); // Redirect after successful signup, potentially to login
-      } else {
-        setError(response.data.message || "Signup failed. Please try again.");
-      }
+    try {
+      await signup(email, password, name);
+      alert("Signup successful!");
+      navigate("/login");
     } catch (err) {
-      console.log(err);
-      
-      setError(err.response?.data?.message || "An error occurred. Please try again.");
+      console.error(err);
+      setError("Signup failed: " + err.message);
     }
   };
 
@@ -57,9 +46,9 @@ const Signup = () => {
         <div className="flex-1 bg-blue-700 text-white flex flex-col justify-center items-center p-8">
           <div className="text-6xl mb-4"></div>
           <h1 className="text-5xl font-bold mb-4 pt-50">
-            Hello<br /> from <br/>Code Sync<span role="img" aria-label="waving hand">👋</span>
+            Hello<br /> from <br />Code Sync<span role="img" aria-label="waving hand">👋</span>
           </h1>
-          <p className="text-lg mb-8"></p> {/* You can add more descriptive text here */}
+          <p className="text-lg mb-8"></p>
           <p className="mt-auto text-sm">© 2024 codesync. All rights reserved.</p>
         </div>
 
@@ -67,14 +56,14 @@ const Signup = () => {
         <div className="flex-1 bg-white flex flex-col justify-center items-center p-8">
           <div className="w-full max-w-md">
             <h2 className="text-3xl font-bold mb-6">Code Sync</h2>
-            <h3 className="text-2xl font-semibold mb-4">Create a Free Account</h3> {/* Changed title */}
+            <h3 className="text-2xl font-semibold mb-4">Create a Free Account</h3>
             <p className="text-sm mb-6">
               Already have an account?{" "}
-              <a href="/login" className="text-blue-500">Login</a> {/* Link to login */}
+              <a href="/login" className="text-blue-500">Login</a>
             </p>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
-            <div> {/* Added name input field */}
+              <div>
                 <input
                   type="text"
                   placeholder="Full Name"
@@ -111,7 +100,6 @@ const Signup = () => {
               >
                 Sign Up
               </button>
-             {/* Removed Google login button for signup */}
             </form>
           </div>
         </div>

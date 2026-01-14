@@ -1,16 +1,16 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState, useMemo } from "react";
 import {
   MdOutlinePublishedWithChanges,
   MdDownload,
   MdFullscreen,
   MdFullscreenExit,
 } from "react-icons/md";
-import { FaPlay } from "react-icons/fa";
+import { FaPlay, FaCode } from "react-icons/fa";
 import { MdClear } from "react-icons/md";
 import Editor from "@monaco-editor/react";
 import { UserContext } from "./UserContext";
-import socket from "./socket";
-
+import { updateCursorPosition, subscribeToCursors } from "../../firebaseService";
+import debounce from "lodash.debounce";
 
 export const EditorContainer = ({
   file,
@@ -18,386 +18,288 @@ export const EditorContainer = ({
   folderId,
   onFullScreen,
   isFullScreen,
-  ws,
   setOutputText,
   setIsWaitingForInput,
   roomId,
-  
+  updateCode,
+  subscribeToCode,
+  onRunCode,
+  isReadOnly
 }) => {
-  const { folderFeatures } = useContext(UserContext);
+  const { folderFeatures, user } = useContext(UserContext);
   const codeRef = useRef(file?.code || "");
   const [isSaved, setIsSaved] = useState(true);
-  const editorRef = useRef(null); // Stores Monaco editor instance
-  const pendingCodeRef = useRef(null);
-  const lastSentCode = useRef("");
-  let debounceTimer;
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const decorationRef = useRef([]);
+
+  const debouncedCursorUpdate = useMemo(
+    () => debounce((data) => {
+      if (!roomId || !user) return;
+      updateCursorPosition(roomId, user.uid || user.id, data);
+    }, 50),
+    [roomId, user]
+  );
 
   useEffect(() => {
     codeRef.current = file?.code || "";
   }, [file]);
 
   const onChangeCode = (newCode) => {
-    if (!file?.id) return; // Safety check only
-  
+    if (!file?.id) return;
     codeRef.current = newCode;
     setIsSaved(false);
-    console.log("✏️ Emitting codeChange:", roomId, file?.id, newCode);
-  
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      if (editorRef.current) {
-        const position = editorRef.current.getPosition();
-        socket.emit("codeChange", {
-          roomId,
-          fileId: file.id,
-          code: newCode,
-          cursor: position, // 👈
-        });
-        lastSentCode.current = newCode;
-      }
-    }, 600); // Maybe reduce to 800ms now
-  };  
+
+    if (updateCode) {
+      updateCode(file.id, newCode);
+    }
+  };
 
   useEffect(() => {
-    if (!socket) return;
-  
-    const handleIncomingCode = ({ roomId: incomingRoomId, fileId, code, cursor }) => {
-      if (incomingRoomId !== roomId) return;
-    
-      const fileToUpdate = folderFeatures.getFileById(fileId);
-      if (fileToUpdate) {
-        fileToUpdate.code = code;
-        localStorage.setItem("folderData", JSON.stringify(folderFeatures.folders));
-      }
-    
-      if (file?.id === fileId && editorRef.current) {
-        const editor = editorRef.current;
-        const currentCode = editor.getValue();
-    
-        if (code === lastSentCode.current) {
-          console.log("⚡ Skipping update because it's our own sent code.");
-          return;
-        }
-    
-        if (currentCode !== code) {
-          editor.setValue(code);
-    
-          if (cursor) {
-            editor.setPosition(cursor); // 🔥 NEW: Apply sender's cursor
-          }
-          editor.focus();
+    if (!file?.id || !subscribeToCode) return;
+
+    const unsubscribe = subscribeToCode(file.id, (code) => {
+      // ... (existing logic)
+      if (editorRef.current) {
+        const current = editorRef.current.getValue();
+        if (current !== code) {
+          // Save cursor state
+          const pos = editorRef.current.getPosition();
+          editorRef.current.setValue(code);
+          // Restore cursor
+          editorRef.current.setPosition(pos);
           codeRef.current = code;
         }
       }
-    };
-    
-  
-    socket.on("codeUpdate", handleIncomingCode);
-    socket.on("savedCode", handleIncomingCode);
-  
-    return () => {
-      socket.off("codeUpdate", handleIncomingCode);
-      socket.off("savedCode", handleIncomingCode);
-    };
-  }, [roomId, file?.id]);
-  
+    });
 
-  {/*useEffect(() => {
-    if (roomId && file?.id && editorRef.current) {
-      const currentCode = editorRef.current.getValue();
-      console.log("📤 Syncing code on mount:", currentCode);
-      socket.emit("codeChange", { roomId, fileId: file.id, code: currentCode });
-    }
-  }, [file?.id]);*/}
+    return () => unsubscribe();
+  }, [file?.id, subscribeToCode]);
+
+  // Cursors Subscription
+  useEffect(() => {
+    if (!roomId || !editorRef.current || !monacoRef.current) return;
+
+    const unsubscribe = subscribeToCursors(roomId, (cursors) => {
+      if (!editorRef.current || !monacoRef.current) return;
+      const monaco = monacoRef.current;
+      const currentUser = user?.uid || user?.id;
+
+      const newDecorations = cursors
+        .filter(c => c.userId !== currentUser && c.fileId === file?.id) // Filter by file!
+        .map(c => {
+          return {
+            range: new monaco.Range(c.lineNumber, c.column, c.lineNumber, c.column),
+            options: {
+              className: 'remote-cursor', // Global CSS class
+              hoverMessage: { value: `User: ${c.userName}` },
+              beforeContentClassName: 'remote-cursor-label' // Optional
+            }
+          };
+        });
+
+      decorationRef.current = editorRef.current.deltaDecorations(decorationRef.current, newDecorations);
+    });
+    return () => unsubscribe();
+  }, [roomId, file?.id, user]); // Depend on file.id
 
   const exportCode = () => {
     const codeValue = codeRef.current?.trim();
 
     if (!codeValue) {
       alert("Please Type Some Code in the Editor Before Exporting");
-      return; // Stop execution if no code is written
+      return;
     }
 
-    // Create a blob from the code
     const codeBlob = new Blob([codeValue], {
       type: file?.type || "text/plain",
     });
 
-    // Create a URL for the blob
     const downloadUrl = URL.createObjectURL(codeBlob);
-
-    // Create a temporary download link
     const link = document.createElement("a");
     link.href = downloadUrl;
     link.download = file?.title;
 
-    // Append link to body, trigger click, then remove
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    // Clean up the created URL
     URL.revokeObjectURL(downloadUrl);
   };
 
   const onSaveCode = () => {
     if (!file?.id || !roomId) return;
-  
     folderFeatures.saveCode(file.id, folderId, codeRef.current);
     setIsSaved(true);
-  
-    // 🔥 Broadcast to all clients
-    socket.emit("saveCode", {
-      roomId,
-      fileId: file.id,
-      code: codeRef.current,
-    });
   };
 
-  useEffect(() => {
-    if (!socket) return;
-  
-    socket.on("savedCode", ({ fileId, code }) => {
-      console.log("💾 Received Saved Code:", fileId);
-  
-      const fileToUpdate = folderFeatures.getFileById(fileId);
-      if (fileToUpdate) {
-        fileToUpdate.code = code; // ✅ Update file code
-        localStorage.setItem("folderData", JSON.stringify(folderFeatures.folders)); // ✅ Update localStorage
-      }
-  
-      if (file?.id === fileId && editorRef.current) {
-        const currentCode = editorRef.current.getValue();
-        if (currentCode !== code) {
-          editorRef.current.setValue(code);
-          codeRef.current = code;
-        }
-  
-        setIsSaved(true); // ✅ ADD THIS LINE → set editor as "Saved"
-      }
-    });
-  
-    return () => socket.off("savedCode");
-  }, [roomId, file?.id]);
-  
-
-  // Auto-save code with debounce effect
+  // Auto-save code
   useEffect(() => {
     if (!file) return;
 
-    let didFileChange = true; // Track if the file has changed (like renaming)
-
     const timeout = setTimeout(() => {
-      if (!didFileChange) {
-        folderFeatures.saveCode(file?.id, folderId, codeRef.current);
-        setIsSaved(true);
-      }
-      didFileChange = false; // Reset after skipping initial save on file change
-    }, 1000);
+      folderFeatures.saveCode(file.id, folderId, codeRef.current);
+      setIsSaved(true);
+    }, 2000);
 
-    return () => {
-      didFileChange = false;
-      clearTimeout(timeout);
-    };
+    return () => clearTimeout(timeout);
   }, [file?.id, folderId, folderFeatures]);
 
-  const handleEditorMount = (editor) => {
+  const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
-  
-    if (pendingCodeRef.current) {
-      editor.setValue(pendingCodeRef.current);
-      pendingCodeRef.current = null;
-    }
-  
-    
-  };  
+    monacoRef.current = monaco;
 
-  useEffect(() => {
-    if (roomId && file?.id) {
-      const codeToSet = codeRef.current;
-  
-      if (editorRef.current) {
-        editorRef.current.setValue(codeToSet);
-      } else {
-        pendingCodeRef.current = codeToSet;
-      }
-  
-      // ✅ Emit codeChange so others also get the latest
-      socket.emit("codeChange", {
-        roomId,
+    editor.onDidChangeCursorPosition((e) => {
+      const position = e.position;
+      if (!file?.id) return;
+      debouncedCursorUpdate({
         fileId: file.id,
-        code: codeToSet,
+        lineNumber: position.lineNumber,
+        column: position.column,
+        userName: user?.firstName || "Anonymous",
+        color: "#FFA500" // Default Orange
       });
-  
-      // ✅ ADD THIS LINE → Important!
-      socket.emit("fileSelected", { roomId, fileId: file.id }); // 👈 this triggers server to notify other clients
-    }
-  }, [file?.id]);    
-    
-  {/*const onRunCode = () => {
-    if (!editorRef.current) {
-      console.error("Editor instance is not available!");
-      return;
-    }
-
-    const code = editorRef.current.getValue(); // Get live code from the editor
-    const language = file?.language;
-
-    runCode({ code, language });
-    console.log("Running Code:", code, "Language:", language);
-  };*/}
-
-  {/*const runCode = () => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      console.error("WebSocket not connected");
-      return;
-    }
-  
-    const sourceCode = editorRef.current.getValue(); // Get code from Monaco Editor
-    if (!sourceCode) {
-      console.warn("No code provided!");
-      return;
-    }
-  
-    setOutputText(""); // Clear previous output
-    setIsWaitingForInput(false);
-  
-    ws.send(
-      JSON.stringify({
-        language: file?.language, // Ensure this is set properly
-        code: sourceCode,
-      })
-    );
-  };*/}
-
-  const runCode = () => {
-    const code = editorRef.current.getValue();
-    if (!code || !file?.language) return;
-  
-    setOutputText("");
-    setIsWaitingForInput(false);
-  
-    socket.emit("clearOutput", { roomId }); // 🔥 NEW
-    socket.emit("runCode", {
-      roomId,
-      code,
-      language: file.language,
     });
-  };  
-  
+  };
 
   function handleEditorWillMount(monaco) {
     monaco.editor.defineTheme("custom-dark", {
-      base: "vs-dark", // Base theme (can be "vs", "vs-dark", or "hc-black")
-      inherit: true, // Inherit base theme properties
-      rules: [], // Syntax highlighting rules (optional)
+      base: "vs-dark",
+      inherit: true,
+      rules: [],
       colors: {
-        "editor.background": "#121212", // Set background color
-        "editor.lineHighlightBackground": "#33333350", // Current line highlight
-        "editorLineNumber.foreground": "#888888", // Default line numbers
-        "editorLineNumber.activeForeground": "#ffffff", // Active line number
+        "editor.background": "#1e1e1e00", // Transparent background for glass effect
+        "editor.lineHighlightBackground": "#ffffff10",
+        "editorLineNumber.foreground": "#555555",
+        "editorLineNumber.activeForeground": "#ffffff",
+        "scrollbarSlider.background": "#ffffff20",
+        "scrollbarSlider.hoverBackground": "#ffffff30",
+        "scrollbarSlider.activeBackground": "#ffffff40",
       },
     });
   }
 
-  const getIcon = {
-    SiJavascript: <img src="/src/assets/javascript.svg" className="w-5" />,
-    FaJava: <img src="/src/assets/java.svg" className="w-5" />,
-    TbBrandCpp: <img src="/src/assets/cpp.svg" className="h-3 ml-0.5" />,
-    SiPython: <img src="/src/assets/python.svg" className="w-5" />,
-    FaFile: <img src="/src/assets/document.svg" className="w-5" />,
+  const getIcon = (iconName) => {
+    const srcMap = {
+      SiJavascript: "/src/assets/javascript.svg",
+      FaJava: "/src/assets/java.svg",
+      TbBrandCpp: "/src/assets/cpp.svg",
+      SiPython: "/src/assets/python.svg",
+      FaFile: "/src/assets/document.svg",
+    };
+
+    const src = srcMap[iconName] || "/src/assets/document.svg";
+    return <img src={src} className="w-4 h-4 object-contain" alt="icon" />;
   };
 
   if (!file) {
     return (
-      <div className="flex flex-col h-full">
-        <header className="h-10 flex items-center justify-between font-medium border-b border-[#333333] px-2 py-1.5">
-          <span className="flex items-center justify-center gap-1 px-1.5 py-1 rounded-sm ">
-            <span>Welcome to </span>
-            <img src="/src/assets/logo.png" className="w-6" alt="Logo" />
-            <span className="text-slate-200 font-semibold">Code</span>
-            <span className="text-[#f8b101] font-bold">Sync</span>{" "}
-          </span>
-          <span onClick={onFullScreen}>
-            {isFullScreen ? (
-              <MdFullscreenExit
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            ) : (
-              <MdFullscreen
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            )}
-          </span>
-        </header>
-        <div className="h-full flex items-center justify-center text-gray-400">
-          No File Open..!
+      <div className="flex flex-col h-full items-center justify-center text-gray-400 select-none">
+        <div className="p-6 rounded-full bg-white/5 mb-6 border border-white/5 shadow-2xl backdrop-blur-sm animate-pulse-slow">
+          <FaCode className="text-blue-500/80 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" size={64} />
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Ready to Create?</h2>
+        <p className="text-gray-400 text-lg mb-8 max-w-md text-center">
+          Select a file from the explorer or create a new one to start your coding session.
+        </p>
+        <div className="flex gap-4">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center border border-white/10">
+              <span className="font-mono text-xs text-gray-300">CTRL</span>
+            </div>
+            <span className="text-xs text-gray-500">Run</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center border border-white/10">
+              <span className="font-mono text-xs text-gray-300">CTRL+S</span>
+            </div>
+            <span className="text-xs text-gray-500">Save</span>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="h-10 flex justify-between font-medium rounded-t-md border-b border-[#333333] px-2 py-1.5">
-        <span className="flex items-center justify-center bg-[#282828] gap-1 px-1.5 py-1 rounded-sm ">
-          {getIcon[file?.icon]}
-          <h1>{file?.title}</h1>
+    <div className="flex flex-col h-full bg-transparent overflow-hidden">
+      <header className="h-11 flex justify-between items-center bg-[#141414]/50 border-b border-white/5 px-2 select-none backdrop-blur-md">
+
+        {/* File Tab */}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-t-lg border-t border-x border-blue-500/20 relative top-1 transition-all">
+          {getIcon(file?.icon)}
+          <span className="text-sm text-blue-100 font-medium max-w-[120px] truncate">{file?.title}</span>
           <span
-            className={`w-2 h-2 mx-0.5 rounded-full ${
-              isSaved ? "w-0 h-0 mx-0" : "bg-gray-600"
-            }`}
+            className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${isSaved ? "bg-transparent scale-0" : "bg-blue-400 scale-100 shadow-[0_0_5px_rgba(96,165,250,0.8)]"}`}
           ></span>
-          <MdClear
-            size={19}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
+          <button
             onClick={closeFile}
-          />
-        </span>
-        <span className="flex items-center gap-3 pr-1\1">
-          <FaPlay
-            size={16}
-            onClick={runCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <MdOutlinePublishedWithChanges
-            size={20}
-            onClick={onSaveCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <MdDownload
-            size={22}
+            className="ml-1 text-blue-300/50 hover:text-white hover:bg-white/10 rounded-full p-0.5 transition-colors"
+          >
+            <MdClear size={14} />
+          </button>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => !isReadOnly && onRunCode && onRunCode(codeRef.current, file.language)}
+            disabled={isReadOnly}
+            className={`group flex items-center gap-2 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/40 hover:to-emerald-600/40 border border-green-500/30 text-green-400 hover:text-green-300 px-4 py-1.5 rounded-lg transition-all shadow-lg hover:shadow-green-500/20 ${isReadOnly ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+          >
+            <FaPlay size={10} className="group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold tracking-wide">RUN</span>
+          </button>
+
+          <div className="w-px h-5 bg-white/10 mx-2"></div>
+
+          <button
+            onClick={!isReadOnly ? onSaveCode : undefined}
+            disabled={isReadOnly}
+            className={`p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-lg transition-colors ${isReadOnly ? 'opacity-30 cursor-not-allowed' : ''}`}
+            title={isReadOnly ? "Read Only" : "Save"}
+          >
+            <MdOutlinePublishedWithChanges size={20} />
+          </button>
+
+          <button
             onClick={exportCode}
-            className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-          />
-          <span onClick={onFullScreen} className="ml-[-5px]">
-            {isFullScreen ? (
-              <MdFullscreenExit
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            ) : (
-              <MdFullscreen
-                size={25}
-                className="cursor-pointer text-[#b3b3b3] hover:text-[#f2f2f2]"
-              />
-            )}
-          </span>
-        </span>
+            className="p-2 text-gray-400 hover:text-purple-400 hover:bg-white/5 rounded-lg transition-colors"
+            title="Download"
+          >
+            <MdDownload size={20} />
+          </button>
+
+          <button
+            onClick={onFullScreen}
+            className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+            title="Toggle Fullscreen"
+          >
+            {isFullScreen ? <MdFullscreenExit size={22} /> : <MdFullscreen size={22} />}
+          </button>
+        </div>
       </header>
 
-      <section className="flex-1 py-2 px-1 rounded-b-md">
+      <section className="flex-1 relative bg-transparent">
         <Editor
           key={file?.id}
-          height={"100%"}
+          height="100%"
           language={file?.language}
           theme="custom-dark"
           beforeMount={handleEditorWillMount}
           value={codeRef.current}
           onChange={onChangeCode}
-          onMount={handleEditorMount} // Attach the onMount event
+          onMount={handleEditorMount}
+          options={{
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: 14,
+            lineHeight: 24,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            padding: { top: 16 },
+            cursorBlinking: "smooth",
+            smoothScrolling: true,
+            readOnly: isReadOnly,
+          }}
         />
       </section>
     </div>

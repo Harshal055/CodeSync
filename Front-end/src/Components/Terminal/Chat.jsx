@@ -2,17 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import Avatar from "react-avatar";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
-import socket from "./socket";
 import { useParams } from "react-router-dom";
-import { CiFileOn } from "react-icons/ci";
-import { BsEmojiSmile } from "react-icons/bs";
+import { BsEmojiSmile, BsSendFill } from "react-icons/bs";
 
-const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex }) => {
+const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex, messages = [], sendMessage }) => {
   const { roomId } = useParams();
-  const [messages, setMessages] = useState(() => {
-    const stored = localStorage.getItem(`chatMessages_${roomId}`);
-    return stored ? JSON.parse(stored) : [];
-  });
   const [input, setInput] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
@@ -23,82 +17,17 @@ const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    socket.on(
-      "chatFile",
-      ({ userName, fileName, fileType, fileData, time, id }) => {
-        setMessages((prev) => [
-          ...prev,
-          { userName, fileName, fileType, fileData, time, id },
-        ]);
-      }
-    );
-
-    return () => {
-      socket.off("chatFile");
-    };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(`chatMessages_${roomId}`, JSON.stringify(messages));
-  }, [messages, roomId]);
-
-  useEffect(() => {
-    setMessages(() => {
-      const stored = localStorage.getItem(`chatMessages_${roomId}`);
-      return stored ? JSON.parse(stored) : [];
-    });
-  }, [roomId]);
-
-  const sendMessage = () => {
-    if (!input.trim() || !userName) {
-      console.warn("🚫 Cannot send: missing input or userName");
-      return;
+  const handleSendMessage = () => {
+    if (!input.trim()) return;
+    if (sendMessage) {
+      sendMessage(input.trim());
+      setInput("");
+      setShowEmojiPicker(false);
     }
-
-    const time = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    console.log("👤 Sending message:", { userName, roomId, input }); // ✅ ADD THIS
-
-    socket.emit("chatMessage", {
-      roomId,
-      userName,
-      message: input.trim(),
-      time,
-    });
-
-    setInput("");
-    setShowEmojiPicker(false);
   };
 
   const addEmoji = (e) => {
     setInput((prev) => prev + e.native);
-  };
-
-  const handleFileSend = (file) => {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const time = new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      socket.emit("chatFile", {
-        roomId,
-        userName,
-        fileName: file.name,
-        fileType: file.type,
-        fileData: reader.result,
-        time,
-        id: Date.now(),
-      });
-    };
-    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
@@ -112,7 +41,7 @@ const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }
 
-      setUnseenCount(0); // reset unseen count when viewing chat
+      setUnseenCount(0);
     }
   }, [isActive, messages]);
 
@@ -134,91 +63,62 @@ const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex }) => {
     return groups;
   };
 
-  useEffect(() => {
-    const handleMessage = (msg) => {
-      setMessages((prev) => [...prev, msg]); // ✅ update messages
-      if (chatTabIndex !== 1) {
-        setUnseenCount((prev) => prev + 1);
-      }
-    };
-
-    socket.on("chatMessage", handleMessage);
-
-    return () => {
-      socket.off("chatMessage", handleMessage);
-    };
-  }, [chatTabIndex]);
-
-  useEffect(() => {
-    if (chatTabIndex === 1) setUnseenCount(0);
-  }, [chatTabIndex]);
-
   return (
-    <div className="flex flex-col h-full min-h-[700px]">
-      <div className="flex-1 overflow-y-auto p-2 mb-2.5 text-base min-h-0 scrollbar-none">
+    <div className="flex flex-col h-full bg-[#121212]/50 backdrop-blur-sm rounded-lg overflow-hidden border border-white/5">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
         {groupMessages().map((group, index) => {
           const isSelf = group.userName === userName;
-          const totalMessages = messages.length;
-          const unseenStartIndex = totalMessages - unseenCount;
 
           return (
             <div
               key={index}
-              className={`mb-5 flex flex-col ${
-                isSelf ? "items-end" : "items-start"
-              }`}
+              className={`flex flex-col ${isSelf ? "items-end" : "items-start"}`}
             >
-              {!isSelf && (
-                <div className="text-sm font-thin text-gray-300 mb-1 ml-1">
-                  {group.userName}
-                </div>
-              )}
-              {group.items.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`px-3 py-2 rounded-xl mb-1 max-w-[75%] whitespace-pre-wrap break-words ${
-                    isSelf
-                      ? "bg-[#282828] text-[#f2f2f2] self-end"
-                      : "bg-[#333] text-[#f2f2f2] self-start"
-                  }`}
-                >
-                  {msg.message && <div>{msg.message}</div>}
-                  {msg.fileData && (
-                    <>
-                      {msg.fileType?.startsWith("image/") ? (
-                        <img
-                          src={msg.fileData}
-                          alt="sent"
-                          className="max-w-full max-h-[250px] rounded-lg mt-2 object-contain"
-                        />
-                      ) : (
-                        <a
-                          href={msg.fileData}
-                          download={msg.fileName}
-                          className="flex items-center gap-2 mt-2 p-2 rounded-lg hover:bg-[#2a2a2a] border border-gray-600 text-[#f2f2f2]"
-                        >
-                          <CiFileOn size={20} className="text-[#0e78f8]" />
-                          <span className="truncate max-w-[200px]">
-                            {msg.fileName}
-                          </span>
-                        </a>
-                      )}
-                    </>
-                  )}
-
-                  <div className="text-[10px] text-right text-gray-300 mt-1">
-                    {msg.time}
+              <div className="flex items-end gap-2 max-w-[85%]">
+                {!isSelf && (
+                  <div className="mb-1 hidden sm:block">
+                    <Avatar
+                      name={group.userName}
+                      size="28"
+                      round="50%"
+                      textSizeRatio={2}
+                      className="shadow-sm"
+                    />
                   </div>
+                )}
+
+                <div className={`flex flex-col ${isSelf ? "items-end" : "items-start"}`}>
+                  {!isSelf && (
+                    <span className="text-xs text-gray-400 ml-1 mb-1">{group.userName}</span>
+                  )}
+                  {group.items.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`px-4 py-2 my-0.5 rounded-2xl text-sm leading-relaxed shadow-sm break-words max-w-full ${isSelf
+                          ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm"
+                          : "bg-[#2a2a2a] text-gray-200 rounded-tl-sm border border-white/5"
+                        }`}
+                    >
+                      {msg.message}
+                    </div>
+                  ))}
+                  <span className="text-[10px] text-gray-500 mt-1 mx-1">
+                    {group.items[group.items.length - 1].time ? new Date(group.items[group.items.length - 1].time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
                 </div>
-              ))}
-              <div className="mt-1">
-                <Avatar
-                  name={group.userName}
-                  size={34}
-                  round="10px"
-                  textSizeRatio={2.5}
-                  style={{ fontWeight: 550 }}
-                />
+
+                {isSelf && (
+                  <div className="mb-1 hidden sm:block">
+                    <Avatar
+                      name={userName}
+                      size="28"
+                      round="50%"
+                      textSizeRatio={2}
+                      className="shadow-md border border-white/10"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -226,44 +126,40 @@ const Chat = ({ unseenCount, setUnseenCount, isActive, chatTabIndex }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="relative p-2 flex flex-col gap-3 pt-3 border-t border-[#333333]">
-        <div className="flex gap-3">
+      {/* Input Area */}
+      <div className="p-3 bg-[#0a0a0a]/80 border-t border-white/5 backdrop-blur-md">
+        <div className="relative flex items-center gap-2 bg-[#1a1a1a] p-1.5 rounded-full border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20 transition-all shadow-lg">
+
           <button
             onClick={() => setShowEmojiPicker((prev) => !prev)}
-            className="text-xl text-gray-300 mr-1"
+            className="p-2 text-gray-400 hover:text-yellow-400 transition-colors rounded-full hover:bg-white/5"
           >
-            <BsEmojiSmile size={21} />
+            <BsEmojiSmile size={20} />
           </button>
-          <label htmlFor="file-upload" className="cursor-pointer text-gray-300">
-            <CiFileOn size={24} />
-          </label>
-          <input
-            type="file"
-            id="file-upload"
-            className="hidden"
-            onChange={(e) => handleFileSend(e.target.files[0])}
-          />
-        </div>
 
-        {showEmojiPicker && (
-          <div className="absolute bottom-20 left-2 z-10">
-            <Picker data={data} onEmojiSelect={addEmoji} />
-          </div>
-        )}
+          {showEmojiPicker && (
+            <div className="absolute bottom-16 left-0 z-50 shadow-2xl rounded-xl border border-white/10 overflow-hidden">
+              <Picker data={data} theme="dark" onEmojiSelect={addEmoji} />
+            </div>
+          )}
 
-        <div className="flex items-center gap-3">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            className="flex-1 h-10 rounded bg-[#121212] text-[#f2f2f2] outline-none resize-none placeholder-gray-300 py-2 scrollbar-none"
-            placeholder="Type to write a message"
+            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+            className="flex-1 bg-transparent text-gray-200 text-sm placeholder-gray-500 focus:outline-none px-2"
+            placeholder="Type a message..."
           />
+
           <button
-            onClick={sendMessage}
-            className="h-10 px-4 bg-[#0e78f8] text-black rounded-2xl font-semibold"
+            onClick={handleSendMessage}
+            disabled={!input.trim()}
+            className={`p-2 rounded-full transition-all duration-300 ${input.trim()
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 scale-100'
+                : 'bg-transparent text-gray-600 scale-90 cursor-default'
+              }`}
           >
-            Send
+            <BsSendFill size={16} />
           </button>
         </div>
       </div>

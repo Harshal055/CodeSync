@@ -16,7 +16,7 @@ const server = http.createServer(app); // Create HTTP server from Express app
 // Allowed frontend origins helper
 // Permit any vercel.app subdomain (Vercel deployments) plus localhost/127.0.0.1 dev origins
 const allowedOrigins = [
-  'https://codesync-2pky.onrender.com',
+  // 'https://codesync-2pky.onrender.com',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
@@ -629,11 +629,65 @@ io.on("connection", (socket) => {
 });
 
 // --- Start Server ---
-const PORT = process.env.PORT || 8081;
-// Use server.listen (the http server instance) instead of app.listen
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+const PORT = parseInt(process.env.PORT, 10) || 8081;
+const MAX_PORT_RETRIES = 5;
+let listenAttempt = 0;
+
+function tryListen(port) {
+  // Attach a one-time error handler for EADDRINUSE or other errors
+  const onError = (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use.`);
+      listenAttempt++;
+      if (listenAttempt <= MAX_PORT_RETRIES) {
+        const nextPort = port + 1;
+        console.log(`Attempting to listen on port ${nextPort} (attempt ${listenAttempt}/${MAX_PORT_RETRIES})...`);
+        // remove this handler before retrying to avoid duplicate handling
+        server.removeListener('error', onError);
+        tryListen(nextPort);
+      } else {
+        console.error('Exceeded maximum port retry attempts. Please free the port or set a different PORT environment variable.');
+        process.exit(1);
+      }
+    } else {
+      console.error('Server error during listen:', err);
+      process.exit(1);
+    }
+  };
+
+  server.once('error', onError);
+
+  server.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+    // Clean up the error handler for the successful listen
+    server.removeListener('error', onError);
+  });
+}
+
+tryListen(PORT);
+
+// Graceful shutdown helpers
+async function shutdown() {
+  console.log('Shutting down server...');
+  server.close(async () => {
+    try {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed.');
+      process.exit(0);
+    } catch (err) {
+      console.error('Error closing MongoDB connection:', err);
+      process.exit(1);
+    }
+  });
+  // Force exit if not closed in time
+  setTimeout(() => {
+    console.warn('Forcing shutdown.');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Basic error handler to capture and log errors (keeps responses JSON and logs stack)
 app.use((err, req, res, next) => {

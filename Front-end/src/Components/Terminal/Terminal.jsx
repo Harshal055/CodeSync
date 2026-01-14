@@ -1,196 +1,61 @@
-import { useState, useEffect, useContext, useRef } from "react";
+import { useContext } from "react";
 import { UserContext } from "./UserContext";
 import "./terminal.css";
-import socket from "./socket";
+import { FaTerminal } from "react-icons/fa";
 
 const Terminal = ({
   folderId,
   file,
   outputText,
   setOutputText,
-  ws,
-  setWs,
-  isWaitingForInput,
-  setIsWaitingForInput,
-  userInput,
-  setUserInput,
   roomId,
 }) => {
-  {
-    /* Socket connection is provided via the shared socket.io client import (see ./socket).
-       The old raw WebSocket client (ws://localhost:5000) was removed to avoid hard-coded URLs.
-    */
-  }
-  useEffect(() => {
-    socket.on("codeOutput", ({ output, waitingForInput }) => {
-      setOutputText((prev) => {
-        return prev + (prev ? "\n" : "") + output;
-      });
-  
-      // ✅ When waiting for input, reset the userInput
-      if (waitingForInput) {
-        setUserInput(""); // 👈 this line is the fix
-      }
-  
-      setIsWaitingForInput(waitingForInput ?? false);
-    });
-  
-    return () => socket.off("codeOutput");
-  }, []);
-  
-
-  useEffect(() => {
-    socket.on("syncInput", ({ input, sender }) => {
-      if (sender !== socket.id) {
-        setUserInput(input);
-      }
-    });
-
-    return () => socket.off("syncInput");
-  }, []);
-
-  useEffect(() => {
-    socket.on("inputEcho", ({ input, sender }) => {
-      if (sender === socket.id) return;
-  
-      setOutputText((prev) => prev + "\n" + input);
-    });
-  
-    return () => socket.off("inputEcho");
-  }, []);
-  
-  useEffect(() => {
-    socket.on("clearOutput", () => {
-      setOutputText(""); // ✅ Clear all clients' terminal
-    });
-  
-    return () => socket.off("clearOutput");
-  }, []);  
 
   const { folderFeatures } = useContext(UserContext);
   const folder = folderFeatures.getFolderById(folderId);
 
-  const folderPath = folder ? `${folder.title}` : "";
-  const filePath = file ? (
-    <span className="text-blue-400">\{file.title}</span>
-  ) : (
-    ""
-  );
-  const symbol = folder || file ? ">" : "";
-
-  const fullPath = (
-    <div className="text-green-400 font-mono">
-      {folderPath}
-      {filePath}
-      {symbol}
-    </div>
-  );
-
-  {
-    /*const handleUserInput = (e) => {
-    if (e.key === "Enter" && userInput.trim() !== "") {
-      e.preventDefault();
-      console.log("✏️ Sending Input:", userInput);
-      ws.send(JSON.stringify({ input: userInput.trim() }));
-
-      setOutputText((prev) => {
-        let lines = prev.split("\n");
-
-        if (isWaitingForInput && lines.length > 0) {
-          lines[lines.length - 1] += " " + userInput.trim();
-        } else {
-          lines.push(userInput.trim());
-        }
-
-        return lines.join("\n");
-      });
-
-      setUserInput("");
-      setIsWaitingForInput(false);
-    }
-  };
-
-  const handleUserInput = (e) => {
-    if (e.key === "Enter" && userInput.trim()) {
-      e.preventDefault();
-
-      if (userInput.trim()) {
-        socket.emit("codeInput", {
-          roomId,
-          input: userInput.trim(),
-        });
-
-        // Only append locally — not broadcasted
-        setOutputText((prev) => prev + "\n" + userInput.trim());
-
-        setUserInput("");
-        setIsWaitingForInput(false);
-      }
-    }
-  }; */
-  }
+  const folderPath = folder ? `${folder.title}` : "~";
+  const fileName = file ? file.title : "";
 
   return (
-    <div className="h-full flex flex-col pl-2 pt-.5 pb-2 pr-1 mb-4">
-      {fullPath}
+    <div className="h-full flex flex-col bg-transparent overflow-hidden font-mono text-sm">
+      {/* Terminal Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/5 select-none text-xs backdrop-blur-sm">
+        <div className="flex items-center gap-2 text-gray-400">
+          <FaTerminal size={10} />
+          <span className="font-semibold tracking-wide">TERMINAL</span>
+        </div>
+        <div className="flex gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 shadow-sm"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></div>
+        </div>
+      </div>
 
-      <textarea
-        value={
-          isWaitingForInput
-            ? (() => {
-                const lines = outputText.split("\n");
-                const last = lines.pop();
-                return [...lines, last + userInput].join("\n");
-              })()
-            : outputText
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && userInput.trim()) {
-            e.preventDefault();
-        
-            const input = userInput.trim();
-        
-            // 1. Emit to backend (it will handle prompt and next line)
-            socket.emit("codeInput", {
-              roomId,
-              input,
-            });
-        
-            // 2. Echo *only input*, not prompt, locally
-            setOutputText((prev) => prev + "\n" + input);
-        
-            // 3. Broadcast to others to echo just the input, not full prompt again
-            socket.emit("inputEcho", {
-              roomId,
-              input,
-              sender: socket.id,
-            });
-        
-            setUserInput("");
-            setIsWaitingForInput(false);
-          }
-        }}
-          
-        onChange={(e) => {
-          if (!isWaitingForInput) return;
+      {/* Terminal Content */}
+      <div className="flex-1 p-3 overflow-hidden flex flex-col relative w-full">
+        {/* Breadcrumbs / Prompt */}
+        <div className="flex flex-wrap items-center gap-1.5 mb-2 text-xs font-medium">
+          <span className="text-green-400">user@codesync</span>
+          <span className="text-gray-500">:</span>
+          <span className="text-blue-400">~/{folderPath}</span>
+          {fileName && (
+            <>
+              <span className="text-gray-600">/</span>
+              <span className="text-yellow-400">{fileName}</span>
+            </>
+          )}
+          <span className="text-gray-400 ml-1">$</span>
+        </div>
 
-          const fullText = e.target.value;
-          const lines = fullText.split("\n");
-          const typedLine = lines[lines.length - 1];
-          const promptLine = outputText.split("\n").pop() || "";
-
-          const input = typedLine.slice(promptLine.length);
-          setUserInput(input);
-
-          socket.emit("syncInput", {
-            roomId,
-            input,
-            sender: socket.id,
-          });
-        }}
-        className="scroll-hover custom-scroll transition-all duration-300 ease-in-out flex-1 w-full resize-none bg-[#121212] outline-none text-stone-200 font-mono overflow-auto"
-        style={{ minHeight: "100%" }}
-      />
+        <textarea
+          value={outputText}
+          readOnly
+          spellCheck={false} // Disable spellcheck for code
+          className="flex-1 w-full bg-transparent resize-none outline-none text-gray-300 custom-scroll leading-relaxed font-mono text-xs md:text-sm p-1"
+          style={{ fontFamily: "Menlo, Monaco, 'Courier New', monospace" }} // Ensure safe monospace font
+        />
+      </div>
     </div>
   );
 };

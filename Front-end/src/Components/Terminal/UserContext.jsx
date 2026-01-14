@@ -1,5 +1,14 @@
 import React, { createContext, useEffect, useState } from "react";
 import { v4 as uuidV4 } from "uuid";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile
+} from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "../../firebaseConfig"; // Adjust path if needed
 
 export const UserContext = createContext();
 
@@ -25,22 +34,74 @@ export const defaultCodes = {
 };
 
 export const UserProvider = ({ children }) => {
-  // Load user image from localStorage or set defaults
-  const [image, setImage] = useState(() => {
-    const storedImage = localStorage.getItem("userImage");
-    return storedImage ? storedImage : null;
+  // Firebase Auth State
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Legacy local state (kept for compatibility with existing components)
+  const [image, setImage] = useState(() => localStorage.getItem("userImage") || null);
+  const [userData, setUserData] = useState(() => {
+    const stored = localStorage.getItem("userData");
+    return stored ? JSON.parse(stored) : { firstName: "", lastName: "", email: "", mobile: "" };
   });
 
-  // Load user data from localStorage or set defaults
-  const [userData, setUserData] = useState(() => {
-    const storedData = localStorage.getItem("userData");
-    if (storedData) {
-      return JSON.parse(storedData);
+  // --- Firebase Auth Functions ---
+
+  const login = async (email, password) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // Fetch additional user data from Firestore if needed
+    const docRef = doc(db, "users", userCredential.user.uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      setUserData(data);
+      localStorage.setItem("userData", JSON.stringify(data));
     }
-    const defaultData = { firstName: "", lastName: "", email: "", mobile: "" };
-    localStorage.setItem("userData", JSON.stringify(defaultData));
-    return defaultData;
-  });
+    return userCredential.user;
+  };
+
+  const signup = async (email, password, name) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(userCredential.user, { displayName: name });
+
+    // Save user profile to Firestore
+    const userProfile = {
+      firstName: name.split(" ")[0],
+      lastName: name.split(" ").slice(1).join(" ") || "",
+      email: email,
+      uid: userCredential.user.uid
+    };
+
+    await setDoc(doc(db, "users", userCredential.user.uid), userProfile);
+    setUserData(userProfile);
+    localStorage.setItem("userData", JSON.stringify(userProfile));
+
+    return userCredential.user;
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+    setUserData({ firstName: "", lastName: "", email: "", mobile: "" });
+    localStorage.removeItem("userData");
+    setUser(null);
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Sync user data on load
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUserData(docSnap.data());
+          localStorage.setItem("userData", JSON.stringify(docSnap.data()));
+        }
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const folderData = [
     {
@@ -72,9 +133,6 @@ export const UserProvider = ({ children }) => {
       ],
     },
   ];
-
- 
-  
 
   const [folders, setFolders] = useState(() => {
     const localData = localStorage.getItem("folderData");
@@ -356,11 +414,52 @@ export const UserProvider = ({ children }) => {
     saveCode,
     syncFromRemote,
     removeFolderIfRemote,
+    downloadProjectZip: async () => {
+      try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        folders.forEach(folder => {
+          if (!folder.title) return;
+          const folderHelper = zip.folder(folder.title);
+          if (folder.file && Array.isArray(folder.file)) {
+            folder.file.forEach(file => {
+              if (file.title) {
+                let fileName = file.title;
+                if (!fileName.includes('.')) {
+                  const map = { javascript: 'js', python: 'py', cpp: 'cpp', java: 'java', plaintext: 'txt' };
+                  fileName += `.${map[file.language] || 'txt'}`;
+                }
+                folderHelper.file(fileName, file.code || "");
+              }
+            })
+          }
+        });
+
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `CodeSync_Project.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("Failed to zip project:", err);
+        alert("Failed to download project.");
+      }
+    }
   };
 
   return (
     <UserContext.Provider
       value={{
+        user,
+        loading,
+        login,
+        signup,
+        logout,
         userData,
         setUserData,
         image,
@@ -372,7 +471,7 @@ export const UserProvider = ({ children }) => {
         folderFeatures,
       }}
     >
-      {children}
+      {!loading && children}
     </UserContext.Provider>
   );
 };
